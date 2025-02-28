@@ -1,0 +1,156 @@
+diff --git a/src/zimg/graph/graphbuilder.cpp b/src/zimg/graph/graphbuilder.cpp
+index e6a60db..69195a2 100644
+--- a/src/zimg/graph/graphbuilder.cpp
++++ b/src/zimg/graph/graphbuilder.cpp
+@@ -327,6 +327,7 @@ struct GraphBuilder::internal_state {
+ 	ColorFamily color;
+ 	colorspace::ColorspaceDefinition colorspace;
+ 	AlphaType alpha;
++	force_state force;
+ private:
+ 	void chroma_from_luma(unsigned subsample_w, unsigned subsample_h)
+ 	{
+@@ -365,13 +366,14 @@ private:
+ 			planes[PLANE_A].active_top -= luma_parity_offset(parity);
+ 	}
+ public:
+-	internal_state() : planes{}, color{}, colorspace{}, alpha{} {}
++	internal_state() : planes{}, color{}, colorspace{}, alpha{}, force{} {}
+ 
+ 	explicit internal_state(const state &state) :
+ 		planes{},
+ 		color{ state.color },
+ 		colorspace(state.colorspace),
+-		alpha{ state.alpha }
++		alpha{ state.alpha },
++		force(state.force)
+ 	{
+ 		planes[PLANE_Y].width = state.width;
+ 		planes[PLANE_Y].height = state.height;
+@@ -419,7 +421,8 @@ public:
+ 			lhs.planes[PLANE_Y] == rhs.planes[PLANE_Y] &&
+ 			(!lhs.has_chroma() || lhs.planes[PLANE_U] == rhs.planes[PLANE_U]) &&
+ 			(!lhs.has_chroma() || lhs.planes[PLANE_V] == rhs.planes[PLANE_V]) &&
+-			(!lhs.has_alpha() || lhs.planes[PLANE_A] == rhs.planes[PLANE_A]);
++			(!lhs.has_alpha() || lhs.planes[PLANE_A] == rhs.planes[PLANE_A]) &&
++			lhs.force == rhs.force;
+ 	}
+ 
+ 	friend bool operator!=(const internal_state &lhs, const internal_state &rhs)
+@@ -526,6 +529,8 @@ private:
+ 
+ 	bool needs_interpolation(const internal_state &target)
+ 	{
++		if (target.force)
++			return true;
+ 		if (needs_interpolation_plane(target, PLANE_Y))
+ 			return true;
+ 		if (m_state.has_chroma() && target.has_chroma() && needs_interpolation_plane(target, PLANE_U))
+@@ -574,6 +579,8 @@ private:
+ 
+ 	bool needs_resize_plane(const internal_state &target, int p)
+ 	{
++		if (target.force)
++			return true;
+ 		internal_state::plane plane = target.planes[p];
+ 		plane.format = m_state.planes[p].format;
+ 		return m_state.planes[p] != plane;
+@@ -581,6 +588,8 @@ private:
+ 
+ 	bool needs_resize(const internal_state &target)
+ 	{
++		if (target.force)
++			return true;
+ 		if (needs_resize_plane(target, PLANE_Y))
+ 			return true;
+ 		if (m_state.has_chroma() && target.has_chroma() && needs_resize_plane(target, PLANE_U))
+@@ -801,6 +810,8 @@ private:
+ 				.set_shift_h(shift_h)
+ 				.set_subwidth(subwidth)
+ 				.set_subheight(subheight)
++				.set_force_h(target.force.force_h)
++				.set_force_v(target.force.force_v)
+ 				.set_cpu(params.cpu);
+ 
+ 			observer.resize(conv, p);
+diff --git a/src/zimg/graph/graphbuilder.h b/src/zimg/graph/graphbuilder.h
+index 7bafac3..422b7ce 100644
+--- a/src/zimg/graph/graphbuilder.h
++++ b/src/zimg/graph/graphbuilder.h
+@@ -104,6 +104,26 @@ public:
+ 		BOTTOM,
+ 	};
+ 
++	struct force_state {
++		bool force_h;
++		bool force_v;
++
++		explicit operator bool() const
++		{
++			return force_h || force_v;
++		}
++
++		friend bool operator==(const force_state &lhs, const force_state &rhs)
++		{
++			return lhs.force_h == rhs.force_h && lhs.force_v == rhs.force_v;
++		}
++
++		friend bool operator!=(const force_state &lhs, const force_state &rhs)
++		{
++			return !(lhs == rhs);
++		}
++	};
++
+ 	// Canonical state.
+ 	struct state {
+ 		unsigned width;
+@@ -128,6 +148,8 @@ public:
+ 		double active_height;
+ 
+ 		AlphaType alpha;
++
++		force_state force;
+ 	};
+ 
+ 	// Filter instantiation parameters.
+diff --git a/src/zimg/resize/resize.cpp b/src/zimg/resize/resize.cpp
+index 195938d..c031c97 100644
+--- a/src/zimg/resize/resize.cpp
++++ b/src/zimg/resize/resize.cpp
+@@ -32,7 +32,9 @@ ResizeConversion::ResizeConversion(unsigned src_width, unsigned src_height, Pixe
+ 	shift_h{},
+ 	subwidth{ static_cast<double>(src_width) },
+ 	subheight{ static_cast<double>(src_height) },
+-	cpu{ CPUClass::NONE }
++	cpu{ CPUClass::NONE },
++	force_h {},
++	force_v {}
+ {}
+ 
+ auto ResizeConversion::create() const -> filter_pair try
+@@ -40,8 +42,8 @@ auto ResizeConversion::create() const -> filter_pair try
+ 	if (src_width > pixel_max_width(type) || dst_width > pixel_max_width(type))
+ 		error::throw_<error::OutOfMemory>();
+ 
+-	bool skip_h = (src_width == dst_width && shift_w == 0 && subwidth == src_width);
+-	bool skip_v = (src_height == dst_height && shift_h == 0 && subheight == src_height);
++	bool skip_h = !force_h && (src_width == dst_width && shift_w == 0 && subwidth == src_width);
++	bool skip_v = !force_v && (src_height == dst_height && shift_h == 0 && subheight == src_height);
+ 
+ 	if (skip_h && skip_v)
+ 		return{};
+diff --git a/src/zimg/resize/resize.h b/src/zimg/resize/resize.h
+index 24c1b6c..246efca 100644
+--- a/src/zimg/resize/resize.h
++++ b/src/zimg/resize/resize.h
+@@ -35,6 +35,8 @@ struct ResizeConversion {
+ 	BUILDER_MEMBER(double, shift_h)
+ 	BUILDER_MEMBER(double, subwidth)
+ 	BUILDER_MEMBER(double, subheight)
++	BUILDER_MEMBER(bool, force_h)
++	BUILDER_MEMBER(bool, force_v)
+ 	BUILDER_MEMBER(CPUClass, cpu)
+ #undef BUILDER_MEMBER
+ 
+-Subproject commit e2239ee6043f73722e7aa812a459f54a28552929
++Subproject commit 5bcb2d78a16edd7110e72ef694d229815aa29542

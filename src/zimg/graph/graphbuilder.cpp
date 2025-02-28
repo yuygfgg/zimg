@@ -327,6 +327,7 @@ struct GraphBuilder::internal_state {
 	ColorFamily color;
 	colorspace::ColorspaceDefinition colorspace;
 	AlphaType alpha;
+	force_state force;
 private:
 	void chroma_from_luma(unsigned subsample_w, unsigned subsample_h)
 	{
@@ -365,13 +366,14 @@ private:
 			planes[PLANE_A].active_top -= luma_parity_offset(parity);
 	}
 public:
-	internal_state() : planes{}, color{}, colorspace{}, alpha{} {}
+	internal_state() : planes{}, color{}, colorspace{}, alpha{}, force{} {}
 
 	explicit internal_state(const state &state) :
 		planes{},
 		color{ state.color },
 		colorspace(state.colorspace),
-		alpha{ state.alpha }
+		alpha{ state.alpha },
+		force(state.force)
 	{
 		planes[PLANE_Y].width = state.width;
 		planes[PLANE_Y].height = state.height;
@@ -419,7 +421,8 @@ public:
 			lhs.planes[PLANE_Y] == rhs.planes[PLANE_Y] &&
 			(!lhs.has_chroma() || lhs.planes[PLANE_U] == rhs.planes[PLANE_U]) &&
 			(!lhs.has_chroma() || lhs.planes[PLANE_V] == rhs.planes[PLANE_V]) &&
-			(!lhs.has_alpha() || lhs.planes[PLANE_A] == rhs.planes[PLANE_A]);
+			(!lhs.has_alpha() || lhs.planes[PLANE_A] == rhs.planes[PLANE_A]) &&
+			lhs.force == rhs.force;
 	}
 
 	friend bool operator!=(const internal_state &lhs, const internal_state &rhs)
@@ -526,6 +529,8 @@ private:
 
 	bool needs_interpolation(const internal_state &target)
 	{
+		if (target.force)
+			return true;
 		if (needs_interpolation_plane(target, PLANE_Y))
 			return true;
 		if (m_state.has_chroma() && target.has_chroma() && needs_interpolation_plane(target, PLANE_U))
@@ -574,6 +579,8 @@ private:
 
 	bool needs_resize_plane(const internal_state &target, int p)
 	{
+		if (target.force)
+			return true;
 		internal_state::plane plane = target.planes[p];
 		plane.format = m_state.planes[p].format;
 		return m_state.planes[p] != plane;
@@ -581,6 +588,8 @@ private:
 
 	bool needs_resize(const internal_state &target)
 	{
+		if (target.force)
+			return true;
 		if (needs_resize_plane(target, PLANE_Y))
 			return true;
 		if (m_state.has_chroma() && target.has_chroma() && needs_resize_plane(target, PLANE_U))
@@ -801,6 +810,8 @@ private:
 				.set_shift_h(shift_h)
 				.set_subwidth(subwidth)
 				.set_subheight(subheight)
+				.set_force_h(target.force.force_h)
+				.set_force_v(target.force.force_v)
 				.set_cpu(params.cpu);
 
 			observer.resize(conv, p);

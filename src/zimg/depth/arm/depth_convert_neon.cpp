@@ -5,7 +5,6 @@
 #include "common/align.h"
 #include "common/ccdep.h"
 #include "depth_convert_arm.h"
-
 #include "common/arm/neon_util.h"
 
 namespace zimg::depth {

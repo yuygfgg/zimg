@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef ZIMG_X86
+#if defined(ZIMG_X86) or defined(ZIMG_ARM)
 
 #ifndef ZIMG_X86_AVX2_UTIL_H_
 #define ZIMG_X86_AVX2_UTIL_H_

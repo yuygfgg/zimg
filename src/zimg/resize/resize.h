@@ -35,6 +35,8 @@ struct ResizeConversion {
 	BUILDER_MEMBER(double, shift_h)
 	BUILDER_MEMBER(double, subwidth)
 	BUILDER_MEMBER(double, subheight)
+	BUILDER_MEMBER(bool, force_h)
+	BUILDER_MEMBER(bool, force_v)
 	BUILDER_MEMBER(CPUClass, cpu)
 #undef BUILDER_MEMBER
 

@@ -1,4 +1,4 @@
-#ifdef ZIMG_X86
+#if defined(ZIMG_X86) or defined(ZIMG_ARM)
 
 #include "x86util.h"
 

@@ -32,7 +32,9 @@ ResizeConversion::ResizeConversion(unsigned src_width, unsigned src_height, Pixe
 	shift_h{},
 	subwidth{ static_cast<double>(src_width) },
 	subheight{ static_cast<double>(src_height) },
-	cpu{ CPUClass::NONE }
+	cpu{ CPUClass::NONE },
+	force_h {},
+	force_v {}
 {}
 
 auto ResizeConversion::create() const -> filter_pair try
@@ -40,8 +42,8 @@ auto ResizeConversion::create() const -> filter_pair try
 	if (src_width > pixel_max_width(type) || dst_width > pixel_max_width(type))
 		error::throw_<error::OutOfMemory>();
 
-	bool skip_h = (src_width == dst_width && shift_w == 0 && subwidth == src_width);
-	bool skip_v = (src_height == dst_height && shift_h == 0 && subheight == src_height);
+	bool skip_h = !force_h && (src_width == dst_width && shift_w == 0 && subwidth == src_width);
+	bool skip_v = !force_v && (src_height == dst_height && shift_h == 0 && subheight == src_height);
 
 	if (skip_h && skip_v)
 		return{};

@@ -104,6 +104,26 @@ public:
 		BOTTOM,
 	};
 
+	struct force_state {
+		bool force_h;
+		bool force_v;
+
+		explicit operator bool() const
+		{
+			return force_h || force_v;
+		}
+
+		friend bool operator==(const force_state &lhs, const force_state &rhs)
+		{
+			return lhs.force_h == rhs.force_h && lhs.force_v == rhs.force_v;
+		}
+
+		friend bool operator!=(const force_state &lhs, const force_state &rhs)
+		{
+			return !(lhs == rhs);
+		}
+	};
+
 	// Canonical state.
 	struct state {
 		unsigned width;
@@ -128,6 +148,8 @@ public:
 		double active_height;
 
 		AlphaType alpha;
+
+		force_state force;
 	};
 
 	// Filter instantiation parameters.
