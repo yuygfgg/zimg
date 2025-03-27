@@ -150,6 +150,7 @@ libzimg_internal_la_SOURCES += \
 	src/zimg/depth/arm/depth_convert_arm.h \
 	src/zimg/depth/arm/dither_arm.cpp \
 	src/zimg/depth/arm/dither_arm.h \
+	src/zimg/depth/arm/error_diffusion_neon.cpp \
 	src/zimg/resize/arm/resize_impl_arm.cpp \
 	src/zimg/resize/arm/resize_impl_arm.h
 
